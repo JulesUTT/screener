@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Screener - Top 100</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Container pour les notifications toast -->
+        <div id="toastContainer" class="toast-container"></div>
+        
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="brand">
+                    <span class="brand-icon">◈</span>
+                    <div class="brand-text">
+                        <h1>Crypto Screener <span class="h4-badge">H4</span></h1>
+                        <p class="subtitle">Détection de tendances sur le Top 100 <span class="separator">•</span> <span class="author">by <a href="https://x.com/cryptofit05" target="_blank" class="author-name">0xCesar</a></span></p>
+                    </div>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Live</span>
+                </div>
+                <button id="refreshBtn" class="btn btn-primary" onclick="refreshData()">
+                    <span class="btn-icon">↻</span> Actualiser
+                </button>
+                <div class="last-update">
+                    MAJ: <span id="lastUpdate">-</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Filtres -->
+        <div class="filters">
+            <div class="filter-group">
+                <label>Filtrer par signal:</label>
+                <div class="filter-buttons">
+                    <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">
+                        Tous <span id="countAll" class="badge">0</span>
+                    </button>
+                    <button class="filter-btn filter-long" data-filter="long" onclick="setFilter('long')">
+                        LONG <span id="countLong" class="badge">0</span>
+                    </button>
+                    <button class="filter-btn filter-short" data-filter="short" onclick="setFilter('short')">
+                        SHORT <span id="countShort" class="badge">0</span>
+                    </button>
+                </div>
+            </div>
+            <div class="auto-refresh">
+                <label>
+                    <input type="checkbox" id="autoRefresh" checked onchange="toggleAutoRefresh()">
+                    Rafraîchissement auto (15 min)
+                </label>
+            </div>
+        </div>
+
+        <!-- Indicateur de chargement -->
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Chargement des données...</p>
+        </div>
+
+        <!-- Tableau des cryptos -->
+        <div id="tableContainer" class="table-container" style="display: none;">
+            <table class="crypto-table">
+                <thead>
+                    <tr>
+                        <th class="sortable" onclick="sortTable('name')">Crypto</th>
+                        <th class="sortable" onclick="sortTable('price')">Prix (USDT)</th>
+                        <th class="sortable" onclick="sortTable('stoch_rsi_k')">Stoch RSI</th>
+                        <th class="sortable" onclick="sortTable('signal')">Signal</th>
+                    </tr>
+                </thead>
+                <tbody id="cryptoTableBody">
+                    <!-- Les données seront insérées ici par JavaScript -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Message si aucun résultat -->
+        <div id="noResults" class="no-results" style="display: none;">
+            <p>Aucune crypto ne correspond aux critères sélectionnés.</p>
+        </div>
+
+        <!-- Footer avec légende -->
+        <footer class="footer">
+            <div class="legend">
+                <h3>📊 Légende des signaux</h3>
+                <div class="legend-grid">
+                    <div class="legend-item">
+                        <span class="signal-badge long-strong">LONG</span>
+                        <p>RSI Stoch < 20 = Setup optimal</p>
+                    </div>
+                    <div class="legend-item">
+                        <span class="signal-badge short-strong">SHORT</span>
+                        <p>RSI Stoch > 80 = Setup optimal</p>
+                    </div>
+                    <div class="legend-item">
+                        <span class="signal-badge long-medium">LONG</span>
+                        <p>RSI Stoch 20-40 = Bon setup</p>
+                    </div>
+                    <div class="legend-item">
+                        <span class="signal-badge short-medium">SHORT</span>
+                        <p>RSI Stoch 60-80 = Bon setup</p>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p class="copyright">Développé avec ◈ par <a href="https://x.com/cryptofit05" target="_blank" class="footer-author">0xCesar</a></p>
+                <p class="data-source">Données: Binance API • CoinGecko</p>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // ========== Variables globales ==========
+        let allData = [];
+        let currentFilter = 'all';
+        let sortColumn = 'signal';
+        let sortDirection = 'asc';
+        let autoRefreshInterval = null;
+        const AUTO_REFRESH_DELAY = 15 * 60 * 1000; // 15 minutes
+        
+        // Tracking des tokens pour les notifications
+        let knownSignals = new Set(); // Tokens déjà vus avec un signal
+        let isFirstLoad = true; // Pour éviter les notifs au premier chargement
+        let notificationsEnabled = false;
+
+        // ========== Système de notifications ==========
+        
+        /**
+         * Demande la permission pour les notifications
+         */
+        async function requestNotificationPermission() {
+            if ('Notification' in window) {
+                const permission = await Notification.requestPermission();
+                notificationsEnabled = permission === 'granted';
+                return notificationsEnabled;
+            }
+            return false;
+        }
+
+        /**
+         * Joue un son de notification (bip)
+         */
+        function playNotificationSound() {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Créer un oscillateur pour le bip
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            // Configuration du son
+            oscillator.frequency.value = 800; // Fréquence en Hz
+            oscillator.type = 'sine';
+            
+            // Volume
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+            
+            // Jouer le son
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+            
+            // Deuxième bip après 200ms
+            setTimeout(() => {
+                const osc2 = audioContext.createOscillator();
+                const gain2 = audioContext.createGain();
+                osc2.connect(gain2);
+                gain2.connect(audioContext.destination);
+                osc2.frequency.value = 1000;
+                osc2.type = 'sine';
+                gain2.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                osc2.start(audioContext.currentTime);
+                osc2.stop(audioContext.currentTime + 0.3);
+            }, 200);
+        }
+
+        /**
+         * Affiche une notification pour un nouveau signal
+         */
+        function showSignalNotification(crypto) {
+            const signalType = crypto.signal;
+            const price = formatNumber(crypto.price, 8);
+            
+            // Notification browser
+            if (notificationsEnabled && 'Notification' in window) {
+                const notification = new Notification(`🚨 Nouveau setup ${signalType}`, {
+                    body: `${crypto.name} propose un setup ${signalType} au prix de ${price} USDT`,
+                    icon: crypto.image || '/static/icon.png',
+                    tag: crypto.symbol, // Évite les doublons
+                    requireInteraction: false
+                });
+                
+                // Fermer après 10 secondes
+                setTimeout(() => notification.close(), 10000);
+            }
+            
+            // Notification visuelle sur la page
+            showToast(crypto);
+        }
+
+        /**
+         * Affiche un toast de notification sur la page
+         */
+        function showToast(crypto) {
+            const toastContainer = document.getElementById('toastContainer');
+            const signalClass = crypto.signal.toLowerCase();
+            const price = formatNumber(crypto.price, 8);
+            
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${signalClass}`;
+            toast.innerHTML = `
+                <div class="toast-icon">
+                    <img src="${crypto.image}" alt="${crypto.name}" onerror="this.style.display='none'">
+                </div>
+                <div class="toast-content">
+                    <div class="toast-title">🚨 Nouveau setup ${crypto.signal}</div>
+                    <div class="toast-body">${crypto.name} à ${price} USDT</div>
+                </div>
+                <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+            `;
+            
+            toastContainer.appendChild(toast);
+            
+            // Animation d'entrée
+            setTimeout(() => toast.classList.add('show'), 10);
+            
+            // Supprimer après 8 secondes
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 8000);
+        }
+
+        /**
+         * Vérifie les nouveaux signaux et envoie des notifications
+         */
+        function checkNewSignals(data) {
+            if (isFirstLoad) {
+                // Premier chargement : on enregistre tous les signaux existants
+                data.forEach(crypto => {
+                    if (crypto.signal === 'LONG' || crypto.signal === 'SHORT') {
+                        knownSignals.add(crypto.symbol);
+                    }
+                });
+                isFirstLoad = false;
+                return;
+            }
+            
+            // Vérifier les nouveaux signaux
+            const newSignals = [];
+            data.forEach(crypto => {
+                if ((crypto.signal === 'LONG' || crypto.signal === 'SHORT') && !knownSignals.has(crypto.symbol)) {
+                    newSignals.push(crypto);
+                    knownSignals.add(crypto.symbol);
+                }
+            });
+            
+            // Retirer les tokens qui n'ont plus de signal
+            const currentSignalSymbols = new Set(data.filter(c => c.signal === 'LONG' || c.signal === 'SHORT').map(c => c.symbol));
+            knownSignals.forEach(symbol => {
+                if (!currentSignalSymbols.has(symbol)) {
+                    knownSignals.delete(symbol);
+                }
+            });
+            
+            // Notifier pour chaque nouveau signal
+            if (newSignals.length > 0) {
+                playNotificationSound();
+                newSignals.forEach(crypto => showSignalNotification(crypto));
+            }
+        }
+
+        // ========== Fonctions principales ==========
+
+        /**
+         * Charge les données depuis l'API
+         */
+        async function loadData() {
+            showLoading(true);
+            
+            try {
+                const response = await fetch('/api/data');
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Vérifier les nouveaux signaux avant de mettre à jour
+                    checkNewSignals(result.data);
+                    
+                    // Trier les données par signal_score dès la réception
+                    // Score bas = meilleur setup LONG (RSI bas) ou SHORT (RSI haut)
+                    allData = result.data.sort((a, b) => {
+                        const scoreA = a.signal_score !== undefined ? a.signal_score : 200;
+                        const scoreB = b.signal_score !== undefined ? b.signal_score : 200;
+                        return scoreA - scoreB;
+                    });
+                    
+                    updateLastUpdate(result.last_update);
+                    updateCounts();
+                    renderTable();
+                } else {
+                    console.error('Erreur lors du chargement des données');
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        /**
+         * Force le rafraîchissement des données
+         */
+        async function refreshData() {
+            const btn = document.getElementById('refreshBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="btn-icon">⏳</span> Chargement...';
+            
+            try {
+                // Demander un rafraîchissement au serveur
+                await fetch('/api/refresh');
+                
+                // Attendre un peu que le serveur récupère les données
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                
+                // Recharger les données
+                await loadData();
+            } catch (error) {
+                console.error('Erreur lors du rafraîchissement:', error);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span class="btn-icon">🔄</span> Rafraîchir';
+            }
+        }
+
+        /**
+         * Met à jour l'affichage de la dernière mise à jour
+         */
+        function updateLastUpdate(timestamp) {
+            const element = document.getElementById('lastUpdate');
+            if (timestamp) {
+                const date = new Date(timestamp);
+                element.textContent = date.toLocaleTimeString('fr-FR');
+            } else {
+                element.textContent = '-';
+            }
+        }
+
+        /**
+         * Met à jour les compteurs de filtres
+         */
+        function updateCounts() {
+            const countAll = allData.length;
+            const countLong = allData.filter(d => d.signal === 'LONG').length;
+            const countShort = allData.filter(d => d.signal === 'SHORT').length;
+            
+            document.getElementById('countAll').textContent = countAll;
+            document.getElementById('countLong').textContent = countLong;
+            document.getElementById('countShort').textContent = countShort;
+        }
+
+        /**
+         * Définit le filtre actif
+         */
+        function setFilter(filter) {
+            currentFilter = filter;
+            
+            // Mettre à jour les boutons
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.filter === filter) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            renderTable();
+        }
+
+        /**
+         * Filtre les données selon le filtre actif
+         */
+        function filterData(data) {
+            switch (currentFilter) {
+                case 'long':
+                    return data.filter(d => d.signal === 'LONG');
+                case 'short':
+                    return data.filter(d => d.signal === 'SHORT');
+                default:
+                    return data;
+            }
+        }
+
+        /**
+         * Trie le tableau par colonne
+         */
+        function sortTable(column) {
+            if (sortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = column;
+                sortDirection = 'asc';
+            }
+            renderTable();
+        }
+
+        /**
+         * Trie les données
+         */
+        function sortData(data) {
+            const sorted = [...data];
+            
+            sorted.sort((a, b) => {
+                // Pour le tri par signal, TOUJOURS utiliser signal_score
+                // Score bas = meilleur setup = doit apparaître EN HAUT
+                if (sortColumn === 'signal') {
+                    const scoreA = a.signal_score !== undefined ? a.signal_score : 200;
+                    const scoreB = b.signal_score !== undefined ? b.signal_score : 200;
+                    return scoreA - scoreB; // Ascendant: score bas en premier
+                }
+                
+                let valA = a[sortColumn];
+                let valB = b[sortColumn];
+                
+                // Comparaison standard pour les autres colonnes
+                if (typeof valA === 'number' && typeof valB === 'number') {
+                    return sortDirection === 'asc' ? valA - valB : valB - valA;
+                } else {
+                    return sortDirection === 'asc' 
+                        ? String(valA).localeCompare(String(valB))
+                        : String(valB).localeCompare(String(valA));
+                }
+            });
+            
+            return sorted;
+        }
+
+        /**
+         * Formate un nombre pour l'affichage
+         */
+        function formatNumber(num, decimals = 2) {
+            if (num === null || num === undefined) return '-';
+            
+            // Pour les très petits nombres (< 0.01)
+            if (num < 0.01 && num > 0) {
+                return num.toFixed(8);
+            }
+            
+            // Pour les grands nombres
+            if (num >= 1000) {
+                return num.toLocaleString('fr-FR', { 
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2 
+                });
+            }
+            
+            return num.toFixed(decimals);
+        }
+
+        /**
+         * Génère le HTML pour une ligne du tableau
+         */
+        function createTableRow(crypto) {
+            const signalClass = crypto.signal.toLowerCase();
+            
+            // Déterminer la force du signal basée sur la note (rating)
+            let signalStrength = '';
+            if (crypto.signal === 'LONG' || crypto.signal === 'SHORT') {
+                if (crypto.rating >= 4) {
+                    signalStrength = 'strong';
+                } else if (crypto.rating >= 2) {
+                    signalStrength = 'medium';
+                } else {
+                    signalStrength = 'weak';
+                }
+            }
+            
+            const strengthClass = signalStrength ? `${signalClass}-${signalStrength}` : signalClass;
+            
+            // Créer les indicateurs de la note
+            const ratingStars = crypto.rating_text || '-';
+            const ratingIndicators = [];
+            if (crypto.has_ema) ratingIndicators.push('<span class="indicator ema" title="EMAs alignées">EMA</span>');
+            if (crypto.has_rsi) ratingIndicators.push('<span class="indicator rsi" title="RSI Stoch optimal">RSI</span>');
+            if (crypto.has_sr) ratingIndicators.push('<span class="indicator sr" title="Proche S/R">S/R</span>');
+            
+            return `
+                <tr class="crypto-row ${signalClass !== 'aucun' ? 'has-signal' : ''}">
+                    <td class="crypto-name">
+                        <img src="${crypto.image}" alt="${crypto.name}" class="crypto-icon" crossorigin="anonymous" referrerpolicy="no-referrer" onerror="this.src='https://via.placeholder.com/24?text=${crypto.name.charAt(0)}'; this.onerror=null;">
+                        <span class="crypto-label">${crypto.name}</span>
+                    </td>
+                    <td class="price">${formatNumber(crypto.price, 8)}</td>
+                    <td class="stoch-rsi">
+                        <div class="stoch-values">
+                            <span class="stoch-k">K: ${formatNumber(crypto.stoch_rsi_k)}</span>
+                            <span class="stoch-d">D: ${formatNumber(crypto.stoch_rsi_d)}</span>
+                        </div>
+                        <div class="stoch-bar">
+                            <div class="stoch-fill" style="width: ${Math.min(100, crypto.stoch_rsi_k)}%"></div>
+                        </div>
+                    </td>
+                    <td class="signal-cell">
+                        <div class="signal-with-rating">
+                            <span class="signal-badge ${strengthClass}">${crypto.signal}</span>
+                            ${crypto.signal !== 'AUCUN' ? `
+                                <div class="rating-info">
+                                    <span class="rating-stars">${ratingStars}</span>
+                                    <div class="rating-indicators">${ratingIndicators.join('')}</div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+
+        /**
+         * Affiche le tableau des cryptos
+         */
+        function renderTable() {
+            const tableBody = document.getElementById('cryptoTableBody');
+            const tableContainer = document.getElementById('tableContainer');
+            const noResults = document.getElementById('noResults');
+            
+            // Filtrer et trier les données
+            let filteredData = filterData(allData);
+            let sortedData = sortData(filteredData);
+            
+            if (sortedData.length === 0) {
+                tableContainer.style.display = 'none';
+                noResults.style.display = 'block';
+            } else {
+                tableContainer.style.display = 'block';
+                noResults.style.display = 'none';
+                tableBody.innerHTML = sortedData.map(createTableRow).join('');
+            }
+        }
+
+        /**
+         * Affiche/masque l'indicateur de chargement
+         */
+        function showLoading(show) {
+            const loading = document.getElementById('loading');
+            const tableContainer = document.getElementById('tableContainer');
+            
+            if (show) {
+                loading.style.display = 'flex';
+                tableContainer.style.display = 'none';
+            } else {
+                loading.style.display = 'none';
+            }
+        }
+
+        /**
+         * Active/désactive le rafraîchissement automatique
+         */
+        function toggleAutoRefresh() {
+            const checkbox = document.getElementById('autoRefresh');
+            
+            if (checkbox.checked) {
+                autoRefreshInterval = setInterval(loadData, AUTO_REFRESH_DELAY);
+                console.log('Rafraîchissement automatique activé');
+            } else {
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+                console.log('Rafraîchissement automatique désactivé');
+            }
+        }
+
+        // ========== Initialisation ==========
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Demander la permission pour les notifications
+            await requestNotificationPermission();
+            
+            // Charger les données initiales
+            loadData();
+            
+            // Activer le rafraîchissement automatique
+            toggleAutoRefresh();
+        });
+    </script>
+</body>
+</html>

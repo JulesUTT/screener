@@ -1,0 +1,14 @@
+# Crypto Screener - Dépendances Python
+# =====================================
+# Installer avec: pip install -r requirements.txt
+
+# Framework web
+Flask==3.0.0
+flask-cors==4.0.0
+
+# Requêtes HTTP pour l'API Binance
+requests==2.31.0
+
+# Calculs numériques et analyse de données
+pandas>=2.2.0
+numpy>=1.26.0
