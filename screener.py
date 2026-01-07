@@ -38,6 +38,7 @@ class CryptoScreener:
         """Initialise le screener."""
         self.top_50_symbols: List[str] = []
         self.market_caps: Dict[str, float] = {}  # Pour stocker les market caps
+        self.fdvs: Dict[str, float] = {}  # Pour stocker les FDV (Fully Diluted Valuation)
         self.images: Dict[str, str] = {}  # Pour stocker les URLs des images
         
         # Liste des stablecoins à exclure
@@ -88,6 +89,8 @@ class CryptoScreener:
             
             # 3. Mapper les symboles CoinGecko vers Binance (exclure stablecoins)
             top_100 = []
+            seen_symbols = set()  # Pour éviter les doublons
+            
             for coin in coingecko_data:
                 symbol = coin['symbol'].upper() + 'USDT'
                 
@@ -95,11 +98,18 @@ class CryptoScreener:
                 if symbol in self.stablecoins:
                     continue
                 
+                # Éviter les doublons (même symbole apparaissant plusieurs fois)
+                if symbol in seen_symbols:
+                    continue
+                
                 # Vérifier si la paire existe sur Binance
                 if symbol in binance_usdt_symbols:
                     top_100.append(symbol)
+                    seen_symbols.add(symbol)
                     # Stocker la market cap pour affichage
                     self.market_caps[symbol] = coin.get('market_cap', 0)
+                    # Stocker la FDV (Fully Diluted Valuation)
+                    self.fdvs[symbol] = coin.get('fully_diluted_valuation', 0) or 0
                     # Stocker l'URL de l'image
                     self.images[symbol] = coin.get('image', '')
                     
@@ -138,7 +148,15 @@ class CryptoScreener:
             ]
             
             usdt_pairs.sort(key=lambda x: float(x['quoteVolume']), reverse=True)
-            self.top_50_symbols = [item['symbol'] for item in usdt_pairs[:50]]
+
+            # Filtrer les stablecoins connus
+            filtered_pairs = []
+            for item in usdt_pairs:
+                if item['symbol'] not in self.stablecoins:
+                    filtered_pairs.append(item['symbol'])
+            
+            self.top_50_symbols = filtered_pairs[:100]
+            print(f"Fallback: {len(self.top_50_symbols)} cryptos par volume récupérées")
             
             return self.top_50_symbols
             
@@ -244,63 +262,74 @@ class CryptoScreener:
             'd': round(stoch_rsi_d.iloc[-1], 2) if not pd.isna(stoch_rsi_d.iloc[-1]) else 0
         }
     
-    def calculate_pivot_points(self, df: pd.DataFrame, prd: int = 10) -> Tuple[List[float], List[float]]:
+    def calculate_support_resistance(self, df: pd.DataFrame, current_price: float) -> Dict:
         """
-        Calcule les points pivots hauts et bas.
+        Calcule les niveaux de support et résistance basés sur le script Pine Script
+        'Support Resistance Channels' de LonesomeTheBlue.
+        
+        Paramètres du script (adaptés pour H4):
+        - prd = 10 : Période pour les pivots (10 barres à gauche et à droite)
+        - ChannelW = 5 : Largeur max du canal en % du range sur 300 barres
+        - minstrength = 1 : Force minimum (au moins 1 pivot point = strength >= 20)
+        - maxnumsr = 6 : Nombre max de S/R
+        - loopback = 290 : Période de lookback pour les pivots
         
         Args:
-            df: DataFrame avec les colonnes high, low, close
-            prd: Période pour le calcul des pivots (regarde prd barres à gauche et à droite)
+            df: DataFrame avec les données OHLCV
+            current_price: Prix actuel
             
         Returns:
-            Tuple (pivot_highs, pivot_lows) - listes des niveaux de pivots
+            Dict avec nearest_support, nearest_resistance, at_support, at_resistance
         """
-        pivot_highs = []
-        pivot_lows = []
+        # Paramètres du script Pine
+        prd = 10  # Pivot Period
+        channel_width_pct = 5  # Maximum Channel Width %
+        min_strength = 1  # Minimum Strength
+        max_num_sr = 6  # Maximum Number of S/R
+        loopback = 290  # Loopback Period
+        
+        # S'assurer qu'on a assez de données
+        if len(df) < loopback:
+            loopback = len(df) - prd - 1
         
         highs = df['high'].values
         lows = df['low'].values
+        closes = df['close'].values
+        
+        # --- Étape 1: Trouver tous les pivots (High/Low) ---
+        pivot_vals = []  # Valeur du pivot
+        pivot_locs = []  # Index du pivot
         
         for i in range(prd, len(df) - prd):
-            # Pivot High: le plus haut des prd barres avant et après
+            # Pivot High: le plus haut sur prd barres à gauche ET à droite
             is_pivot_high = True
             for j in range(1, prd + 1):
                 if highs[i] <= highs[i - j] or highs[i] <= highs[i + j]:
                     is_pivot_high = False
                     break
-            if is_pivot_high:
-                pivot_highs.append(highs[i])
             
-            # Pivot Low: le plus bas des prd barres avant et après
+            # Pivot Low: le plus bas sur prd barres à gauche ET à droite
             is_pivot_low = True
             for j in range(1, prd + 1):
                 if lows[i] >= lows[i - j] or lows[i] >= lows[i + j]:
                     is_pivot_low = False
                     break
-            if is_pivot_low:
-                pivot_lows.append(lows[i])
-        
-        return pivot_highs, pivot_lows
-    
-    def calculate_support_resistance(self, df: pd.DataFrame, current_price: float, 
-                                      channel_width_pct: float = 3.0) -> Dict:
-        """
-        Calcule les niveaux de support et résistance basés sur les pivots.
-        
-        Args:
-            df: DataFrame avec les données OHLCV
-            current_price: Prix actuel
-            channel_width_pct: Largeur maximale du canal en pourcentage
             
-        Returns:
-            Dict avec nearest_support, nearest_resistance, at_support, at_resistance
-        """
-        pivot_highs, pivot_lows = self.calculate_pivot_points(df)
+            if is_pivot_high:
+                pivot_vals.append(highs[i])
+                pivot_locs.append(i)
+            if is_pivot_low:
+                pivot_vals.append(lows[i])
+                pivot_locs.append(i)
         
-        # Combiner tous les pivots
-        all_pivots = pivot_highs + pivot_lows
+        # Filtrer les pivots dans la période de loopback
+        current_bar = len(df) - 1
+        filtered_pivots = []
+        for val, loc in zip(pivot_vals, pivot_locs):
+            if current_bar - loc <= loopback:
+                filtered_pivots.append({'val': val, 'loc': loc})
         
-        if not all_pivots:
+        if not filtered_pivots:
             return {
                 'nearest_support': None,
                 'nearest_resistance': None,
@@ -310,50 +339,121 @@ class CryptoScreener:
                 'resistance_distance_pct': None
             }
         
-        # Calculer la largeur du canal basée sur le range
-        price_range = df['high'].max() - df['low'].min()
-        channel_width = price_range * channel_width_pct / 100
+        # --- Étape 2: Calculer la largeur du canal ---
+        # Basé sur le range des 300 dernières barres
+        range_bars = min(300, len(df))
+        prdhighest = df['high'].iloc[-range_bars:].max()
+        prdlowest = df['low'].iloc[-range_bars:].min()
+        cwidth = (prdhighest - prdlowest) * channel_width_pct / 100
         
-        # Grouper les pivots en clusters (niveaux S/R)
-        all_pivots.sort()
-        sr_levels = []
-        
-        i = 0
-        while i < len(all_pivots):
-            cluster = [all_pivots[i]]
-            j = i + 1
-            while j < len(all_pivots) and all_pivots[j] - cluster[0] <= channel_width:
-                cluster.append(all_pivots[j])
-                j += 1
+        # --- Étape 3: Créer les canaux S/R pour chaque pivot ---
+        def get_sr_vals(pivot_idx):
+            """Crée un canal S/R autour d'un pivot et calcule sa force."""
+            lo = filtered_pivots[pivot_idx]['val']
+            hi = lo
+            num_pp = 0
             
-            # Le niveau S/R est la moyenne du cluster, pondéré par le nombre de touches
-            level = sum(cluster) / len(cluster)
-            strength = len(cluster)  # Plus il y a de pivots, plus le niveau est fort
-            sr_levels.append({'level': level, 'strength': strength})
-            i = j
+            for p in filtered_pivots:
+                cpp = p['val']
+                # Vérifie si le pivot rentre dans le canal
+                if cpp <= hi:
+                    wdth = hi - cpp
+                else:
+                    wdth = cpp - lo
+                
+                if wdth <= cwidth:  # Le pivot rentre dans le canal
+                    if cpp <= hi:
+                        lo = min(lo, cpp)
+                    else:
+                        hi = max(hi, cpp)
+                    num_pp += 20  # Chaque pivot ajoute 20 à la force
+            
+            return hi, lo, num_pp
         
-        # Trouver le support et la résistance les plus proches
+        # --- Étape 4: Calculer force et niveaux pour chaque pivot ---
+        supres = []  # [strength, hi, lo] pour chaque pivot
+        for i in range(len(filtered_pivots)):
+            hi, lo, strength = get_sr_vals(i)
+            supres.append({'strength': strength, 'hi': hi, 'lo': lo})
+        
+        # --- Étape 5: Ajouter la force basée sur les touches de prix ---
+        for sr in supres:
+            h = sr['hi']
+            l = sr['lo']
+            touches = 0
+            for y in range(min(loopback, len(df))):
+                idx = len(df) - 1 - y
+                if idx >= 0:
+                    if (highs[idx] <= h and highs[idx] >= l) or (lows[idx] <= h and lows[idx] >= l):
+                        touches += 1
+            sr['strength'] += touches
+        
+        # --- Étape 6: Sélectionner les meilleurs S/R ---
+        sr_channels = []
+        used_ranges = []
+        
+        # Trier par force décroissante
+        sorted_supres = sorted(supres, key=lambda x: x['strength'], reverse=True)
+        
+        for sr in sorted_supres:
+            if sr['strength'] < min_strength * 20:
+                continue
+            
+            # Vérifier que ce canal ne chevauche pas un canal déjà sélectionné
+            overlap = False
+            for used in used_ranges:
+                if (sr['hi'] <= used['hi'] and sr['hi'] >= used['lo']) or \
+                   (sr['lo'] <= used['hi'] and sr['lo'] >= used['lo']):
+                    overlap = True
+                    break
+            
+            if not overlap:
+                sr_channels.append({'hi': sr['hi'], 'lo': sr['lo'], 'strength': sr['strength']})
+                used_ranges.append({'hi': sr['hi'], 'lo': sr['lo']})
+                
+                if len(sr_channels) >= max_num_sr:
+                    break
+        
+        # --- Étape 7: Trouver support et résistance les plus proches ---
         nearest_support = None
         nearest_resistance = None
         support_strength = 0
         resistance_strength = 0
+        at_support = False
+        at_resistance = False
         
-        for sr in sr_levels:
-            level = sr['level']
-            if level < current_price:
-                if nearest_support is None or level > nearest_support:
-                    nearest_support = level
-                    support_strength = sr['strength']
-            elif level > current_price:
-                if nearest_resistance is None or level < nearest_resistance:
-                    nearest_resistance = level
-                    resistance_strength = sr['strength']
+        for channel in sr_channels:
+            channel_mid = (channel['hi'] + channel['lo']) / 2
+            
+            # Le prix est DANS le canal
+            if current_price <= channel['hi'] and current_price >= channel['lo']:
+                # C'est à la fois support et résistance (on est dedans)
+                at_support = True
+                at_resistance = True
+                nearest_support = channel['lo']
+                nearest_resistance = channel['hi']
+                support_strength = channel['strength']
+                resistance_strength = channel['strength']
+                break
+            
+            # Canal en dessous du prix = Support
+            if channel['hi'] < current_price:
+                if nearest_support is None or channel['hi'] > nearest_support:
+                    nearest_support = channel['hi']
+                    support_strength = channel['strength']
+            
+            # Canal au dessus du prix = Résistance
+            if channel['lo'] > current_price:
+                if nearest_resistance is None or channel['lo'] < nearest_resistance:
+                    nearest_resistance = channel['lo']
+                    resistance_strength = channel['strength']
         
-        # Vérifier si le prix est proche d'un S/R (dans les 2%)
-        proximity_threshold = current_price * 0.02
-        
-        at_support = nearest_support is not None and (current_price - nearest_support) <= proximity_threshold
-        at_resistance = nearest_resistance is not None and (nearest_resistance - current_price) <= proximity_threshold
+        # Vérifier la proximité (dans les 2%)
+        proximity_pct = 0.02
+        if not at_support and nearest_support is not None:
+            at_support = (current_price - nearest_support) / current_price <= proximity_pct
+        if not at_resistance and nearest_resistance is not None:
+            at_resistance = (nearest_resistance - current_price) / current_price <= proximity_pct
         
         # Calculer les distances en pourcentage
         support_distance_pct = None
@@ -533,8 +633,9 @@ class CryptoScreener:
         # Extraire le nom de la crypto (sans USDT)
         crypto_name = symbol.replace('USDT', '')
         
-        # Récupérer la market cap et l'image si disponibles
+        # Récupérer la market cap, FDV et l'image si disponibles
         market_cap = self.market_caps.get(symbol, 0)
+        fdv = self.fdvs.get(symbol, 0)
         image_url = self.images.get(symbol, '')
         
         # Convertir les valeurs numpy en float Python natif pour la sérialisation JSON
@@ -549,6 +650,7 @@ class CryptoScreener:
             'image': image_url,
             'price': float(round(current_price, 8)),
             'market_cap': float(market_cap) if market_cap else 0,
+            'fdv': float(fdv) if fdv else 0,
             'ema_13': float(round(ema_13, 8)),
             'ema_25': float(round(ema_25, 8)),
             'ema_32': float(round(ema_32, 8)),
