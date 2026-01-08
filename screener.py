@@ -48,6 +48,47 @@ class CryptoScreener:
             'AABORAUSDT', 'USD1USDT', 'BFUSDUSDT'
         }
         
+        # Liste blanche des cryptos légitimes du Top 150 par market cap (Janvier 2026)
+        # Utilisée en fallback quand CoinGecko est bloqué
+        self.whitelist_top150 = {
+            # Top 10
+            'BTCUSDT', 'ETHUSDT', 'XRPUSDT', 'BNBUSDT', 'SOLUSDT', 
+            'DOGEUSDT', 'ADAUSDT', 'TRXUSDT', 'AVAXUSDT', 'LINKUSDT',
+            # Top 20
+            'XLMUSDT', 'SUIUSDT', 'DOTUSDT', 'HBARUSDT', 'BCHUSDT',
+            'LTCUSDT', 'UNIUSDT', 'PEPEUSDT', 'NEARUSDT', 'ICPUSDT',
+            # Top 30
+            'APTUSDT', 'ETCUSDT', 'RENDERUSDT', 'AAVEUSDT', 'VETUSDT',
+            'POLUSDT', 'FILUSDT', 'ARBUSDT', 'ATOMUSDT', 'IMXUSDT',
+            # Top 40
+            'OPUSDT', 'INJUSDT', 'FETUSDT', 'GRTUSDT', 'STXUSDT',
+            'THETAUSDT', 'FTMUSDT', 'ALGOUSDT', 'SEIUSDT', 'FLOWUSDT',
+            # Top 50
+            'TIAUSDT', 'JUPUSDT', 'LDOUSDT', 'SANDUSDT', 'AXSUSDT',
+            'MANAUSDT', 'XTZUSDT', 'EOSUSDT', 'NEOUSDT', 'IOTAUSDT',
+            # Top 60
+            'QNTUSDT', 'ARUSDT', 'EGLDUSDT', 'MKRUSDT', 'SNXUSDT',
+            'CRVUSDT', 'RUNEUSDT', 'DYDXUSDT', 'COMPUSDT', 'APEUSDT',
+            # Top 70
+            'MINAUSDT', 'CHZUSDT', 'GALAUSDT', 'KAVAUSDT', 'ZILUSDT',
+            'ENJUSDT', 'GMXUSDT', 'CFXUSDT', 'PENDLEUSDT', 'BLURUSDT',
+            # Top 80
+            '1INCHUSDT', 'HOTUSDT', 'WOOUSDT', 'KSMUSDT', 'CAKEUSDT',
+            'LRCUSDT', 'ANKRUSDT', 'SKLUSDT', 'IOSTUSDT', 'ONTUSDT',
+            # Top 90
+            'ZRXUSDT', 'BATUSDT', 'YFIUSDT', 'CELRUSDT', 'STORJUSDT',
+            'ICXUSDT', 'RVNUSDT', 'SUSHIUSDT', 'COTIUSDT', 'MASKUSDT',
+            # Top 100
+            'AUDIOUSDT', 'ENSUSDT', 'BANDUSDT', 'OCEANUSDT', 'CTSIUSDT',
+            'CKBUSDT', 'JOEUSDT', 'MAGICUSDT', 'STGUSDT', 'RDNTUSDT',
+            # Top 110-120 (marge)
+            'WLDUSDT', 'TONUSDT', 'TAOUSDT', 'ONDOUSDT', 'BONKUSDT',
+            'SHIBUSDT', 'FLOKIUSDT', 'ENAUSDT', 'TRUMPUSDT', 'VIRTUALUSDT',
+            # Autres populaires
+            'ORDIUSDT', 'WIFUSDT', 'PENGUUSDT', 'PYTHUSDT', 'JTOUSDT',
+            'MORPHOUSDT', 'EIGENUSDT', 'ZROUSDT', 'LISTAUSDT', 'NOTUSDT'
+        }
+        
     def get_top_100_symbols(self) -> List[str]:
         """
         Récupère le Top 100 des cryptomonnaies par MARKET CAP via CoinGecko.
@@ -116,10 +157,159 @@ class CryptoScreener:
             print("Fallback: utilisation du volume de trading...")
             return self._get_top_50_by_volume()
     
+    def _get_logo_url(self, symbol: str) -> str:
+        """
+        Génère l'URL du logo pour un symbole donné.
+        Utilise CoinCap comme source principale (fiable et gratuit).
+        
+        Args:
+            symbol: Le symbole sans USDT (ex: 'BTC', 'ETH')
+            
+        Returns:
+            URL de l'image du logo
+        """
+        # Mapping des symboles spéciaux (certains ont des noms différents)
+        symbol_mapping = {
+            'SHIB': 'shiba-inu',
+            'MATIC': 'polygon',
+            'POL': 'polygon',
+            'AVAX': 'avalanche',
+            'ATOM': 'cosmos',
+            'NEAR': 'near-protocol',
+            'FTM': 'fantom',
+            'GRT': 'the-graph',
+            'SAND': 'the-sandbox',
+            'MANA': 'decentraland',
+            'AXS': 'axie-infinity',
+            'CHZ': 'chiliz',
+            'ENJ': 'enjin-coin',
+            'HOT': 'holo',
+            'ZIL': 'zilliqa',
+            'VET': 'vechain',
+            'ONE': 'harmony',
+            'IOTA': 'iota',
+            'ICX': 'icon',
+            'RVN': 'ravencoin',
+            'ONT': 'ontology',
+            'STORJ': 'storj',
+            'BAT': 'basic-attention-token',
+            'ZRX': '0x',
+            'LRC': 'loopring',
+            'CRV': 'curve-dao-token',
+            'SNX': 'synthetix-network-token',
+            'COMP': 'compound',
+            'YFI': 'yearn-finance',
+            'SUSHI': 'sushi',
+            'UNI': 'uniswap',
+            'AAVE': 'aave',
+            'MKR': 'maker',
+            'LINK': 'chainlink',
+            'DOT': 'polkadot',
+            'SOL': 'solana',
+            'ADA': 'cardano',
+            'XRP': 'xrp',
+            'DOGE': 'dogecoin',
+            'TRX': 'tron',
+            'ETC': 'ethereum-classic',
+            'LTC': 'litecoin',
+            'BCH': 'bitcoin-cash',
+            'XLM': 'stellar',
+            'XMR': 'monero',
+            'EOS': 'eos',
+            'XTZ': 'tezos',
+            'ALGO': 'algorand',
+            'THETA': 'theta-network',
+            'FIL': 'filecoin',
+            'ICP': 'internet-computer',
+            'HBAR': 'hedera',
+            'EGLD': 'elrond-erd-2',
+            'QNT': 'quant',
+            'FLOW': 'flow',
+            'NEO': 'neo',
+            'KSM': 'kusama',
+            'WAVES': 'waves',
+            'DASH': 'dash',
+            'ZEC': 'zcash',
+            'KAVA': 'kava',
+            'MINA': 'mina-protocol',
+            'AR': 'arweave',
+            'GMX': 'gmx',
+            'LDO': 'lido-dao',
+            'APE': 'apecoin',
+            'CFX': 'conflux-network',
+            'IMX': 'immutable-x',
+            'OP': 'optimism',
+            'ARB': 'arbitrum',
+            'SUI': 'sui',
+            'SEI': 'sei-network',
+            'TIA': 'celestia',
+            'JUP': 'jupiter-ag',
+            'PEPE': 'pepe',
+            'BONK': 'bonk',
+            'FLOKI': 'floki-inu',
+            'WIF': 'dogwifhat',
+            'ORDI': 'ordi',
+            'STX': 'stacks',
+            'INJ': 'injective-protocol',
+            'FET': 'fetch-ai',
+            'RENDER': 'render-token',
+            'APT': 'aptos',
+            'TAO': 'bittensor',
+            'WLD': 'worldcoin-org',
+            'PYTH': 'pyth-network',
+            'JTO': 'jito-governance-token',
+            'BLUR': 'blur',
+            'PENDLE': 'pendle',
+            'DYDX': 'dydx',
+            'RUNE': 'thorchain',
+            'ENS': 'ethereum-name-service',
+            '1INCH': '1inch',
+            'MASK': 'mask-network',
+            'OCEAN': 'ocean-protocol',
+            'BAND': 'band-protocol',
+            'COTI': 'coti',
+            'CELR': 'celer-network',
+            'ANKR': 'ankr',
+            'WOO': 'woo-network',
+            'SKL': 'skale',
+            'AUDIO': 'audius',
+            'GALA': 'gala',
+            'MAGIC': 'magic',
+            'STG': 'stargate-finance',
+            'RDNT': 'radiant-capital',
+            'CAKE': 'pancakeswap',
+            'JOE': 'trader-joe',
+            'TON': 'the-open-network',
+            'ONDO': 'ondo-finance',
+            'ENA': 'ethena',
+            'EIGEN': 'eigenlayer',
+            'NOT': 'notcoin',
+            'TRUMP': 'official-trump',
+        }
+        
+        symbol_lower = symbol.lower()
+        
+        # Utiliser le mapping si disponible, sinon le symbole direct
+        coin_id = symbol_mapping.get(symbol, symbol_lower)
+        
+        # URL CoinCap (très fiable)
+        return f"https://assets.coincap.io/assets/icons/{symbol_lower}@2x.png"
+    
+    def _fetch_logos_batch(self):
+        """
+        Récupère les logos pour tous les symboles de la whitelist.
+        Appelé en mode fallback quand CoinGecko est indisponible.
+        """
+        for symbol in self.top_50_symbols:
+            crypto_symbol = symbol.replace('USDT', '')
+            if symbol not in self.images or not self.images[symbol]:
+                self.images[symbol] = self._get_logo_url(crypto_symbol)
+    
     def _get_top_50_by_volume(self) -> List[str]:
         """
-        Méthode de fallback: récupère le Top 50 par volume de trading.
-        Utilisée si CoinGecko est indisponible.
+        Méthode de fallback: récupère les cryptos par volume de trading,
+        mais UNIQUEMENT celles de la whitelist (Top 150 légitimes).
+        Utilisée si CoinGecko est indisponible (ex: sur Render).
         
         Returns:
             Liste des symboles
@@ -130,23 +320,25 @@ class CryptoScreener:
             response.raise_for_status()
             data = response.json()
             
+            # Filtrer : seulement les paires USDT qui sont dans la whitelist
             usdt_pairs = [
                 item for item in data 
                 if item['symbol'].endswith('USDT') 
-                and not item['symbol'].startswith('USDT')
+                and item['symbol'] in self.whitelist_top150  # NOUVEAU: doit être dans la whitelist
+                and item['symbol'] not in self.stablecoins
                 and float(item['quoteVolume']) > 0
             ]
             
+            # Trier par volume (les plus actifs en premier)
             usdt_pairs.sort(key=lambda x: float(x['quoteVolume']), reverse=True)
 
-            # Filtrer les stablecoins connus
-            filtered_pairs = []
-            for item in usdt_pairs:
-                if item['symbol'] not in self.stablecoins:
-                    filtered_pairs.append(item['symbol'])
+            # Prendre les 100 premiers de la whitelist par volume
+            self.top_50_symbols = [item['symbol'] for item in usdt_pairs[:100]]
+            print(f"Fallback (whitelist): {len(self.top_50_symbols)} cryptos légitimes récupérées")
             
-            self.top_50_symbols = filtered_pairs[:100]
-            print(f"Fallback: {len(self.top_50_symbols)} cryptos par volume récupérées")
+            # Récupérer les logos depuis CoinCap
+            print("Récupération des logos depuis CoinCap...")
+            self._fetch_logos_batch()
             
             return self.top_50_symbols
             
