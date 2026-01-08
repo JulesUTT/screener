@@ -159,7 +159,6 @@ class CryptoScreener:
         """
         Méthode de fallback: récupère le Top 100 par volume de trading.
         Utilisée si CoinGecko est indisponible.
-        ⚠️ NOTE: Cette méthode NE RETOURNE PAS le top 100 par market cap!
         
         Returns:
             Liste des symboles
@@ -183,16 +182,28 @@ class CryptoScreener:
             # Filtrer les stablecoins connus
             filtered_pairs = []
             for item in usdt_pairs:
-                if item['symbol'] not in self.stablecoins:
-                    filtered_pairs.append(item['symbol'])
+                symbol = item['symbol']
+                if symbol not in self.stablecoins:
+                    filtered_pairs.append(symbol)
+                    # Générer une URL d'image basée sur le symbole (fallback)
+                    crypto_name = symbol.replace('USDT', '').lower()
+                    self.images[symbol] = f"https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/{crypto_name}.png"
+                    # Initialiser market cap et FDV à 0 (pas disponible sans CoinGecko)
+                    self.market_caps[symbol] = 0
+                    self.fdvs[symbol] = 0
+                    
+                    if len(filtered_pairs) >= 100:
+                        break
             
-            self.top_50_symbols = filtered_pairs[:100]
-            print(f"Fallback: {len(self.top_50_symbols)} cryptos par volume récupérées")
+            self.top_50_symbols = filtered_pairs
+            print(f"✅ Fallback: {len(self.top_50_symbols)} cryptos par volume récupérées")
             
             return self.top_50_symbols
             
         except Exception as e:
-            print(f"Erreur fallback volume: {e}")
+            print(f"❌ Erreur fallback volume: {e}")
+            import traceback
+            traceback.print_exc()
             return []
     
     def get_klines(self, symbol: str) -> Optional[pd.DataFrame]:
@@ -749,19 +760,40 @@ class CryptoScreener:
         if not self.top_50_symbols:
             self.get_top_100_symbols()
         
-        results = []
+        print(f"📋 Nombre de symboles à analyser: {len(self.top_50_symbols)}")
         
-        for symbol in self.top_50_symbols:
-            print(f"Analyse de {symbol}...")
-            analysis = self.analyze_symbol(symbol)
-            if analysis:
-                # Ajouter le score de probabilité (basé sur la note + RSI)
-                analysis['signal_score'] = self.calculate_signal_score(
-                    analysis['signal'], 
-                    analysis['stoch_rsi_k'],
-                    analysis['rating']
-                )
-                results.append(analysis)
+        if not self.top_50_symbols:
+            print("❌ ERREUR: Aucun symbole récupéré!")
+            return []
+        
+        results = []
+        errors = 0
+        
+        for i, symbol in enumerate(self.top_50_symbols):
+            try:
+                print(f"Analyse de {symbol} ({i+1}/{len(self.top_50_symbols)})...")
+                analysis = self.analyze_symbol(symbol)
+                if analysis:
+                    # Ajouter le score de probabilité (basé sur la note + RSI)
+                    analysis['signal_score'] = self.calculate_signal_score(
+                        analysis['signal'], 
+                        analysis['stoch_rsi_k'],
+                        analysis['rating']
+                    )
+                    results.append(analysis)
+                else:
+                    errors += 1
+                    print(f"⚠️ Aucune analyse pour {symbol}")
+                    
+                # Petit délai pour éviter le rate limiting de Binance (0.05s = 20 req/s max)
+                if (i + 1) % 10 == 0:
+                    time.sleep(0.1)
+                    
+            except Exception as e:
+                errors += 1
+                print(f"❌ Erreur lors de l'analyse de {symbol}: {e}")
+        
+        print(f"📊 Analyse terminée: {len(results)} réussies, {errors} erreurs")
         
         # Trier par score de probabilité (meilleurs setups en premier)
         # Les signaux avec meilleure note + bon RSI apparaissent en premier

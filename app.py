@@ -43,13 +43,20 @@ def update_cache():
     cache['is_updating'] = True
     
     try:
-        print(f"[{datetime.now()}] Mise à jour du cache...")
+        print(f"[{datetime.now()}] 🔄 Mise à jour du cache...")
         data = screener.scan_all()
         cache['data'] = data
         cache['last_update'] = datetime.now()
-        print(f"[{datetime.now()}] Cache mis à jour avec {len(data)} cryptos")
+        print(f"[{datetime.now()}] ✅ Cache mis à jour avec {len(data)} cryptos")
+        
+        # Log des signaux trouvés
+        signals = [d for d in data if d['signal'] in ['LONG', 'SHORT']]
+        print(f"[{datetime.now()}] 📊 Signaux actifs: {len(signals)} (LONG: {len([s for s in signals if s['signal']=='LONG'])}, SHORT: {len([s for s in signals if s['signal']=='SHORT'])})")
+        
     except Exception as e:
-        print(f"Erreur lors de la mise à jour du cache: {e}")
+        print(f"[{datetime.now()}] ❌ Erreur lors de la mise à jour du cache: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         cache['is_updating'] = False
 
