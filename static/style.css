@@ -453,18 +453,11 @@ body::before {
     gap: 16px;
 }
 
-.brand-icon {
-    font-size: 2.2rem;
-    background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: rotate-icon 8s linear infinite;
-}
-
-@keyframes rotate-icon {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+.brand-logo {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    object-fit: contain;
 }
 
 .brand-text {
@@ -715,17 +708,16 @@ body::before {
     border: 1px solid var(--border-color);
 }
 
-.spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid var(--bg-tertiary);
-    border-top-color: var(--primary-color);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+.spinner-logo {
+    width: 60px;
+    height: 60px;
+    animation: spin 1.5s ease-in-out infinite;
+    border-radius: 8px;
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
 .loading p {
@@ -759,6 +751,28 @@ body::before {
     border-bottom: 1px solid var(--border-color);
 }
 
+/* Largeurs fixes pour alignement */
+.crypto-table th:nth-child(1),
+.crypto-table td:nth-child(1) {
+    width: 25%;
+}
+
+.crypto-table th:nth-child(2),
+.crypto-table td:nth-child(2) {
+    width: 20%;
+    text-align: right;
+}
+
+.crypto-table th:nth-child(3),
+.crypto-table td:nth-child(3) {
+    width: 25%;
+}
+
+.crypto-table th:nth-child(4),
+.crypto-table td:nth-child(4) {
+    width: 30%;
+}
+
 .crypto-table th.sortable {
     cursor: pointer;
     transition: var(--transition);
@@ -770,19 +784,20 @@ body::before {
 
 .crypto-table td {
     padding: 16px;
-    border-bottom: 1px solid var(--border-color);
     font-size: 0.9rem;
 }
 
+/* Bordure sur la ligne entière, pas sur chaque cellule */
 .crypto-table tbody tr {
     transition: var(--transition);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .crypto-table tbody tr:hover {
     background: var(--bg-tertiary);
 }
 
-.crypto-table tbody tr:last-child td {
+.crypto-table tbody tr:last-child {
     border-bottom: none;
 }
 
@@ -828,6 +843,8 @@ body::before {
 
 .price {
     font-family: 'SF Mono', 'Consolas', monospace;
+    text-align: right;
+    padding-right: 24px !important;
     font-weight: 500;
     color: var(--text-primary);
 }
