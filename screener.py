@@ -12,6 +12,7 @@ Timeframe : 4 heures
 import requests
 import pandas as pd
 import numpy as np
+import time
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
@@ -70,9 +71,36 @@ class CryptoScreener:
                 'sparkline': 'false'
             }
             
-            response = requests.get(cg_url, params=params, timeout=15)
-            response.raise_for_status()
-            coingecko_data = response.json()
+            # Headers pour éviter le rate limiting de CoinGecko sur les serveurs cloud
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json',
+            }
+            
+            # Tentative avec retry en cas d'échec (rate limiting)
+            coingecko_data = None
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    response = requests.get(cg_url, params=params, headers=headers, timeout=15)
+                    if response.status_code == 429:  # Rate limited
+                        wait_time = (attempt + 1) * 5  # 5s, 10s, 15s
+                        print(f"CoinGecko rate limited, attente de {wait_time}s (tentative {attempt + 1}/{max_retries})...")
+                        time.sleep(wait_time)
+                        continue
+                    response.raise_for_status()
+                    coingecko_data = response.json()
+                    break
+                except requests.exceptions.RequestException as e:
+                    if attempt < max_retries - 1:
+                        wait_time = (attempt + 1) * 3
+                        print(f"Erreur CoinGecko, retry dans {wait_time}s: {e}")
+                        time.sleep(wait_time)
+                    else:
+                        raise
+            
+            if coingecko_data is None:
+                raise Exception("Impossible de récupérer les données CoinGecko après plusieurs tentatives")
             
             # 2. Récupérer les symboles disponibles sur Binance
             print("Vérification des paires disponibles sur Binance...")
@@ -118,24 +146,26 @@ class CryptoScreener:
                         break
             
             self.top_50_symbols = top_100
-            print(f"Top {len(top_100)} cryptos par Market Cap récupérées (stablecoins exclus)")
+            print(f"✅ [CoinGecko] Top {len(top_100)} cryptos par Market Cap récupérées (stablecoins exclus)")
             
             return self.top_50_symbols
             
         except Exception as e:
-            print(f"Erreur lors de la récupération du Top 50 par Market Cap: {e}")
-            print("Fallback: utilisation du volume de trading...")
+            print(f"❌ Erreur lors de la récupération du Top 100 par Market Cap: {e}")
+            print("⚠️ FALLBACK: utilisation du volume de trading (pas le top 100 par market cap!)...")
             return self._get_top_50_by_volume()
     
     def _get_top_50_by_volume(self) -> List[str]:
         """
-        Méthode de fallback: récupère le Top 50 par volume de trading.
+        Méthode de fallback: récupère le Top 100 par volume de trading.
         Utilisée si CoinGecko est indisponible.
+        ⚠️ NOTE: Cette méthode NE RETOURNE PAS le top 100 par market cap!
         
         Returns:
             Liste des symboles
         """
         try:
+            print("⚠️ Utilisation du fallback par volume de trading (Binance 24h)...")
             url = f"{self.BASE_URL}/ticker/24hr"
             response = requests.get(url, timeout=10)
             response.raise_for_status()
