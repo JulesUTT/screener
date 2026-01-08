@@ -93,6 +93,7 @@ class CryptoScreener:
             
             for coin in coingecko_data:
                 symbol = coin['symbol'].upper() + 'USDT'
+                crypto_symbol = coin['symbol'].upper()
                 
                 # Exclure les stablecoins
                 if symbol in self.stablecoins:
@@ -110,8 +111,9 @@ class CryptoScreener:
                     self.market_caps[symbol] = coin.get('market_cap', 0)
                     # Stocker la FDV (Fully Diluted Valuation)
                     self.fdvs[symbol] = coin.get('fully_diluted_valuation', 0) or 0
-                    # Stocker l'URL de l'image
-                    self.images[symbol] = coin.get('image', '')
+                    # Stocker l'URL de l'image - Utiliser CryptoCompare comme source alternative
+                    # CryptoCompare est plus permissif pour les serveurs cloud
+                    self.images[symbol] = f"https://assets.coincap.io/assets/icons/{crypto_symbol.lower()}@2x.png"
                     
                     if len(top_100) >= 100:
                         break

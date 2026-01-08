@@ -599,10 +599,13 @@
             const isClickable = crypto.signal === 'LONG' || crypto.signal === 'SHORT';
             const clickHandler = isClickable ? `onclick="openChart('${crypto.name}')"` : '';
             
+            // URL de fallback pour les images (utilise plusieurs sources)
+            const fallbackImg = `https://ui-avatars.com/api/?name=${crypto.name.charAt(0)}&background=random&color=fff&size=48`;
+            
             return `
                 <tr class="crypto-row ${signalClass !== 'aucun' ? 'has-signal' : ''}" ${clickHandler}>
                     <td class="crypto-name">
-                        <img src="${crypto.image}" alt="${crypto.name}" class="crypto-icon" crossorigin="anonymous" referrerpolicy="no-referrer" onerror="this.src='https://via.placeholder.com/24?text=${crypto.name.charAt(0)}'; this.onerror=null;">
+                        <img src="${crypto.image}" alt="${crypto.name}" class="crypto-icon" onerror="this.onerror=null; this.src='${fallbackImg}';">
                         <span class="crypto-label">${crypto.name}</span>
                     </td>
                     <td class="price">${formatNumber(crypto.price, 8)}</td>
