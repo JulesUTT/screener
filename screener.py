@@ -12,7 +12,6 @@ Timeframe : 4 heures
 import requests
 import pandas as pd
 import numpy as np
-import time
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
@@ -39,7 +38,6 @@ class CryptoScreener:
         """Initialise le screener."""
         self.top_50_symbols: List[str] = []
         self.market_caps: Dict[str, float] = {}  # Pour stocker les market caps
-        self.fdvs: Dict[str, float] = {}  # Pour stocker les FDV (Fully Diluted Valuation)
         self.images: Dict[str, str] = {}  # Pour stocker les URLs des images
         
         # Liste des stablecoins à exclure
@@ -71,36 +69,9 @@ class CryptoScreener:
                 'sparkline': 'false'
             }
             
-            # Headers pour éviter le rate limiting de CoinGecko sur les serveurs cloud
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'application/json',
-            }
-            
-            # Tentative avec retry en cas d'échec (rate limiting)
-            coingecko_data = None
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    response = requests.get(cg_url, params=params, headers=headers, timeout=15)
-                    if response.status_code == 429:  # Rate limited
-                        wait_time = (attempt + 1) * 5  # 5s, 10s, 15s
-                        print(f"CoinGecko rate limited, attente de {wait_time}s (tentative {attempt + 1}/{max_retries})...")
-                        time.sleep(wait_time)
-                        continue
-                    response.raise_for_status()
-                    coingecko_data = response.json()
-                    break
-                except requests.exceptions.RequestException as e:
-                    if attempt < max_retries - 1:
-                        wait_time = (attempt + 1) * 3
-                        print(f"Erreur CoinGecko, retry dans {wait_time}s: {e}")
-                        time.sleep(wait_time)
-                    else:
-                        raise
-            
-            if coingecko_data is None:
-                raise Exception("Impossible de récupérer les données CoinGecko après plusieurs tentatives")
+            response = requests.get(cg_url, params=params, timeout=15)
+            response.raise_for_status()
+            coingecko_data = response.json()
             
             # 2. Récupérer les symboles disponibles sur Binance
             print("Vérification des paires disponibles sur Binance...")
@@ -117,54 +88,43 @@ class CryptoScreener:
             
             # 3. Mapper les symboles CoinGecko vers Binance (exclure stablecoins)
             top_100 = []
-            seen_symbols = set()  # Pour éviter les doublons
-            
             for coin in coingecko_data:
                 symbol = coin['symbol'].upper() + 'USDT'
-                crypto_symbol = coin['symbol'].upper()
                 
                 # Exclure les stablecoins
                 if symbol in self.stablecoins:
                     continue
                 
-                # Éviter les doublons (même symbole apparaissant plusieurs fois)
-                if symbol in seen_symbols:
-                    continue
-                
                 # Vérifier si la paire existe sur Binance
                 if symbol in binance_usdt_symbols:
                     top_100.append(symbol)
-                    seen_symbols.add(symbol)
                     # Stocker la market cap pour affichage
                     self.market_caps[symbol] = coin.get('market_cap', 0)
-                    # Stocker la FDV (Fully Diluted Valuation)
-                    self.fdvs[symbol] = coin.get('fully_diluted_valuation', 0) or 0
-                    # Stocker l'URL de l'image depuis CoinGecko (source originale)
+                    # Stocker l'URL de l'image
                     self.images[symbol] = coin.get('image', '')
                     
                     if len(top_100) >= 100:
                         break
             
             self.top_50_symbols = top_100
-            print(f"✅ [CoinGecko] Top {len(top_100)} cryptos par Market Cap récupérées (stablecoins exclus)")
+            print(f"Top {len(top_100)} cryptos par Market Cap récupérées (stablecoins exclus)")
             
             return self.top_50_symbols
             
         except Exception as e:
-            print(f"❌ Erreur lors de la récupération du Top 100 par Market Cap: {e}")
-            print("⚠️ FALLBACK: utilisation du volume de trading (pas le top 100 par market cap!)...")
+            print(f"Erreur lors de la récupération du Top 50 par Market Cap: {e}")
+            print("Fallback: utilisation du volume de trading...")
             return self._get_top_50_by_volume()
     
     def _get_top_50_by_volume(self) -> List[str]:
         """
-        Méthode de fallback: récupère le Top 100 par volume de trading.
+        Méthode de fallback: récupère le Top 50 par volume de trading.
         Utilisée si CoinGecko est indisponible.
         
         Returns:
             Liste des symboles
         """
         try:
-            print("⚠️ Utilisation du fallback par volume de trading (Binance 24h)...")
             url = f"{self.BASE_URL}/ticker/24hr"
             response = requests.get(url, timeout=10)
             response.raise_for_status()
@@ -182,28 +142,16 @@ class CryptoScreener:
             # Filtrer les stablecoins connus
             filtered_pairs = []
             for item in usdt_pairs:
-                symbol = item['symbol']
-                if symbol not in self.stablecoins:
-                    filtered_pairs.append(symbol)
-                    # Générer une URL d'image basée sur le symbole (fallback)
-                    crypto_name = symbol.replace('USDT', '').lower()
-                    self.images[symbol] = f"https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/{crypto_name}.png"
-                    # Initialiser market cap et FDV à 0 (pas disponible sans CoinGecko)
-                    self.market_caps[symbol] = 0
-                    self.fdvs[symbol] = 0
-                    
-                    if len(filtered_pairs) >= 100:
-                        break
+                if item['symbol'] not in self.stablecoins:
+                    filtered_pairs.append(item['symbol'])
             
-            self.top_50_symbols = filtered_pairs
-            print(f"✅ Fallback: {len(self.top_50_symbols)} cryptos par volume récupérées")
+            self.top_50_symbols = filtered_pairs[:100]
+            print(f"Fallback: {len(self.top_50_symbols)} cryptos par volume récupérées")
             
             return self.top_50_symbols
             
         except Exception as e:
-            print(f"❌ Erreur fallback volume: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"Erreur fallback volume: {e}")
             return []
     
     def get_klines(self, symbol: str) -> Optional[pd.DataFrame]:
@@ -675,9 +623,8 @@ class CryptoScreener:
         # Extraire le nom de la crypto (sans USDT)
         crypto_name = symbol.replace('USDT', '')
         
-        # Récupérer la market cap, FDV et l'image si disponibles
+        # Récupérer la market cap et l'image si disponibles
         market_cap = self.market_caps.get(symbol, 0)
-        fdv = self.fdvs.get(symbol, 0)
         image_url = self.images.get(symbol, '')
         
         # Convertir les valeurs numpy en float Python natif pour la sérialisation JSON
@@ -692,7 +639,6 @@ class CryptoScreener:
             'image': image_url,
             'price': float(round(current_price, 8)),
             'market_cap': float(market_cap) if market_cap else 0,
-            'fdv': float(fdv) if fdv else 0,
             'ema_13': float(round(ema_13, 8)),
             'ema_25': float(round(ema_25, 8)),
             'ema_32': float(round(ema_32, 8)),
@@ -760,40 +706,19 @@ class CryptoScreener:
         if not self.top_50_symbols:
             self.get_top_100_symbols()
         
-        print(f"📋 Nombre de symboles à analyser: {len(self.top_50_symbols)}")
-        
-        if not self.top_50_symbols:
-            print("❌ ERREUR: Aucun symbole récupéré!")
-            return []
-        
         results = []
-        errors = 0
         
-        for i, symbol in enumerate(self.top_50_symbols):
-            try:
-                print(f"Analyse de {symbol} ({i+1}/{len(self.top_50_symbols)})...")
-                analysis = self.analyze_symbol(symbol)
-                if analysis:
-                    # Ajouter le score de probabilité (basé sur la note + RSI)
-                    analysis['signal_score'] = self.calculate_signal_score(
-                        analysis['signal'], 
-                        analysis['stoch_rsi_k'],
-                        analysis['rating']
-                    )
-                    results.append(analysis)
-                else:
-                    errors += 1
-                    print(f"⚠️ Aucune analyse pour {symbol}")
-                    
-                # Petit délai pour éviter le rate limiting de Binance (0.05s = 20 req/s max)
-                if (i + 1) % 10 == 0:
-                    time.sleep(0.1)
-                    
-            except Exception as e:
-                errors += 1
-                print(f"❌ Erreur lors de l'analyse de {symbol}: {e}")
-        
-        print(f"📊 Analyse terminée: {len(results)} réussies, {errors} erreurs")
+        for symbol in self.top_50_symbols:
+            print(f"Analyse de {symbol}...")
+            analysis = self.analyze_symbol(symbol)
+            if analysis:
+                # Ajouter le score de probabilité (basé sur la note + RSI)
+                analysis['signal_score'] = self.calculate_signal_score(
+                    analysis['signal'], 
+                    analysis['stoch_rsi_k'],
+                    analysis['rating']
+                )
+                results.append(analysis)
         
         # Trier par score de probabilité (meilleurs setups en premier)
         # Les signaux avec meilleure note + bon RSI apparaissent en premier

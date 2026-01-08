@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crypto Screener - Top 100</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,7 +18,7 @@
         <header class="header">
             <div class="header-content">
                 <div class="brand">
-                    <img src="{{ url_for('static', filename='favicon.png') }}" alt="Logo" class="brand-logo">
+                    <span class="brand-icon">◈</span>
                     <div class="brand-text">
                         <h1>Crypto Screener <span class="h4-badge">H4</span></h1>
                         <p class="subtitle">Détection de tendances sur le Top 100 <span class="separator">•</span> <span class="author">by <a href="https://x.com/cryptofit05" target="_blank" class="author-name">0xCesar</a></span></p>
@@ -31,17 +30,55 @@
                     <span class="status-dot"></span>
                     <span class="status-text">Live</span>
                 </div>
-                <button class="btn btn-secondary" onclick="openSettings()">
-                    <span class="btn-icon">⚙️</span> Paramètres
-                </button>
                 <button id="refreshBtn" class="btn btn-primary" onclick="refreshData()">
                     <span class="btn-icon">↻</span> Actualiser
+                </button>
+                <button id="settingsBtn" class="btn btn-settings" onclick="toggleSettings()">
+                    <span class="btn-icon">⚙️</span>
                 </button>
                 <div class="last-update">
                     MAJ: <span id="lastUpdate">-</span>
                 </div>
             </div>
         </header>
+
+        <!-- Modal Paramètres -->
+        <div id="settingsModal" class="settings-modal" style="display: none;">
+            <div class="settings-content">
+                <div class="settings-header">
+                    <h3>⚙️ Paramètres</h3>
+                    <button class="settings-close" onclick="toggleSettings()">×</button>
+                </div>
+                <div class="settings-body">
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <span class="setting-icon">🌓</span>
+                            <div class="setting-text">
+                                <span class="setting-label">Mode clair</span>
+                                <span class="setting-desc">Basculer entre le thème sombre et clair</span>
+                            </div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="lightModeToggle" onchange="toggleLightMode()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-info">
+                            <span class="setting-icon">🔔</span>
+                            <div class="setting-text">
+                                <span class="setting-label">Son des notifications</span>
+                                <span class="setting-desc">Jouer un son lors d'un nouveau signal</span>
+                            </div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="soundToggle" checked onchange="toggleSound()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- Filtres -->
         <div class="filters">
@@ -60,21 +97,27 @@
                 </div>
             </div>
             <div class="filter-group">
-                <label>Minimum d'étoiles:</label>
-                <div class="star-filter">
-                    <button class="star-btn active" data-stars="0" onclick="setMinStars(0)">Tous</button>
-                    <button class="star-btn" data-stars="1" onclick="setMinStars(1)">⭐+</button>
-                    <button class="star-btn" data-stars="2" onclick="setMinStars(2)">⭐⭐+</button>
-                    <button class="star-btn" data-stars="3" onclick="setMinStars(3)">⭐⭐⭐+</button>
-                    <button class="star-btn" data-stars="4" onclick="setMinStars(4)">⭐⭐⭐⭐+</button>
-                    <button class="star-btn" data-stars="5" onclick="setMinStars(5)">⭐⭐⭐⭐⭐</button>
+                <label>Filtrer par note:</label>
+                <div class="filter-buttons rating-filters">
+                    <button class="filter-btn rating-btn active" data-rating="0" onclick="setRatingFilter(0)">
+                        Toutes
+                    </button>
+                    <button class="filter-btn rating-btn" data-rating="3" onclick="setRatingFilter(3)">
+                        ⭐⭐⭐+
+                    </button>
+                    <button class="filter-btn rating-btn" data-rating="4" onclick="setRatingFilter(4)">
+                        ⭐⭐⭐⭐+
+                    </button>
+                    <button class="filter-btn rating-btn" data-rating="5" onclick="setRatingFilter(5)">
+                        ⭐⭐⭐⭐⭐
+                    </button>
                 </div>
             </div>
         </div>
 
         <!-- Indicateur de chargement -->
         <div id="loading" class="loading">
-            <img src="{{ url_for('static', filename='favicon.png') }}" alt="Loading" class="spinner-logo" onerror="this.style.display='none'">
+            <div class="spinner"></div>
             <p>Chargement des données...</p>
         </div>
 
@@ -123,53 +166,21 @@
                     </div>
                 </div>
             </div>
+            <div class="strategy-credit">
+                <p>📈 Stratégie inspirée par <a href="https://x.com/Frenchie_" target="_blank" class="frenchie-link">Frenchie</a></p>
+            </div>
             <div class="footer-bottom">
-                <p class="strategy-credit">📈 Stratégie élaborée par <a href="https://x.com/Frenchie_" target="_blank" class="frenchie-name">Frenchie</a></p>
                 <p class="copyright">Développé avec ◈ par <a href="https://x.com/cryptofit05" target="_blank" class="footer-author">0xCesar</a></p>
                 <p class="data-source">Données: Binance API • CoinGecko</p>
             </div>
         </footer>
     </div>
 
-    <!-- Modal Paramètres -->
-    <div id="settingsModal" class="modal-overlay">
-        <div class="modal">
-            <div class="modal-header">
-                <h2 class="modal-title">⚙️ Paramètres</h2>
-                <button class="modal-close" onclick="closeSettings()">×</button>
-            </div>
-            <div class="modal-body">
-                <div class="settings-group">
-                    <div class="settings-item">
-                        <div>
-                            <div class="settings-label">Mode clair</div>
-                            <div class="settings-description">Basculer entre le thème sombre et clair</div>
-                        </div>
-                        <label class="switch">
-                            <input type="checkbox" id="lightModeToggle" onchange="toggleTheme()">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="settings-item">
-                        <div>
-                            <div class="settings-label">Son des notifications</div>
-                            <div class="settings-description">Jouer un son lors d'un nouveau signal</div>
-                        </div>
-                        <label class="switch">
-                            <input type="checkbox" id="soundToggle" checked onchange="toggleSound()">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script>
         // ========== Variables globales ==========
         let allData = [];
         let currentFilter = 'all';
-        let minStars = 0; // Filtre minimum d'étoiles
+        let currentRatingFilter = 0; // 0 = toutes les notes
         let sortColumn = 'signal';
         let sortDirection = 'asc';
         let autoRefreshInterval = null;
@@ -179,7 +190,55 @@
         let knownSignals = new Set(); // Tokens déjà vus avec un signal
         let isFirstLoad = true; // Pour éviter les notifs au premier chargement
         let notificationsEnabled = false;
-        let soundEnabled = true; // Son des notifications
+        let soundEnabled = true; // Son activé par défaut
+
+        // ========== Gestion des paramètres ==========
+        
+        /**
+         * Charge les paramètres depuis localStorage
+         */
+        function loadSettings() {
+            // Mode clair
+            const lightMode = localStorage.getItem('lightMode') === 'true';
+            if (lightMode) {
+                document.body.classList.add('light-mode');
+                document.getElementById('lightModeToggle').checked = true;
+            }
+            
+            // Son des notifications
+            const soundSetting = localStorage.getItem('soundEnabled');
+            soundEnabled = soundSetting !== 'false'; // true par défaut
+            document.getElementById('soundToggle').checked = soundEnabled;
+        }
+        
+        /**
+         * Ouvre/ferme le modal des paramètres
+         */
+        function toggleSettings() {
+            const modal = document.getElementById('settingsModal');
+            if (modal.style.display === 'none') {
+                modal.style.display = 'flex';
+            } else {
+                modal.style.display = 'none';
+            }
+        }
+        
+        /**
+         * Active/désactive le mode clair
+         */
+        function toggleLightMode() {
+            const isLight = document.getElementById('lightModeToggle').checked;
+            document.body.classList.toggle('light-mode', isLight);
+            localStorage.setItem('lightMode', isLight);
+        }
+        
+        /**
+         * Active/désactive le son des notifications
+         */
+        function toggleSound() {
+            soundEnabled = document.getElementById('soundToggle').checked;
+            localStorage.setItem('soundEnabled', soundEnabled);
+        }
 
         // ========== Système de notifications ==========
         
@@ -199,7 +258,9 @@
          * Joue un son de notification (bip)
          */
         function playNotificationSound() {
-            if (!soundEnabled) return; // Ne pas jouer si désactivé
+            // Ne pas jouer si le son est désactivé
+            if (!soundEnabled) return;
+            
             const audioContext = new (window.AudioContext || window.webkitAudioContext)();
             
             // Créer un oscillateur pour le bip
@@ -427,7 +488,7 @@
             currentFilter = filter;
             
             // Mettre à jour les boutons
-            document.querySelectorAll('.filter-btn').forEach(btn => {
+            document.querySelectorAll('.filter-btn:not(.rating-btn)').forEach(btn => {
                 btn.classList.remove('active');
                 if (btn.dataset.filter === filter) {
                     btn.classList.add('active');
@@ -438,15 +499,15 @@
         }
 
         /**
-         * Définit le filtre minimum d'étoiles
+         * Définit le filtre par note
          */
-        function setMinStars(stars) {
-            minStars = stars;
+        function setRatingFilter(minRating) {
+            currentRatingFilter = minRating;
             
             // Mettre à jour les boutons
-            document.querySelectorAll('.star-btn').forEach(btn => {
+            document.querySelectorAll('.rating-btn').forEach(btn => {
                 btn.classList.remove('active');
-                if (parseInt(btn.dataset.stars) === stars) {
+                if (parseInt(btn.dataset.rating) === minRating) {
                     btn.classList.add('active');
                 }
             });
@@ -455,7 +516,7 @@
         }
 
         /**
-         * Filtre les données selon le filtre actif et les étoiles minimum
+         * Filtre les données selon le filtre actif
          */
         function filterData(data) {
             let filtered = data;
@@ -470,9 +531,9 @@
                     break;
             }
             
-            // Filtre par nombre d'étoiles minimum
-            if (minStars > 0) {
-                filtered = filtered.filter(d => d.rating >= minStars);
+            // Filtre par note minimum
+            if (currentRatingFilter > 0) {
+                filtered = filtered.filter(d => d.rating >= currentRatingFilter);
             }
             
             return filtered;
@@ -498,36 +559,12 @@
             const sorted = [...data];
             
             sorted.sort((a, b) => {
-                // Pour le tri par signal:
-                // 1. D'abord par rating (note) décroissant (5 étoiles en premier)
-                // 2. À rating égal, par FDV décroissante
-                // 3. En dernier, par RSI optimal
+                // Pour le tri par signal, TOUJOURS utiliser signal_score
+                // Score bas = meilleur setup = doit apparaître EN HAUT
                 if (sortColumn === 'signal') {
-                    const ratingA = a.rating || 0;
-                    const ratingB = b.rating || 0;
-                    
-                    // 1. Trier par rating décroissant
-                    if (ratingA !== ratingB) {
-                        return ratingB - ratingA; // Plus haute note en premier
-                    }
-                    
-                    // 2. À rating égal, trier par FDV décroissante
-                    const fdvA = a.fdv || 0;
-                    const fdvB = b.fdv || 0;
-                    if (fdvA !== fdvB) {
-                        return fdvB - fdvA; // Plus grande FDV en premier
-                    }
-                    
-                    // 3. En dernier, trier par RSI optimal
-                    // LONG: RSI bas = meilleur, SHORT: RSI haut = meilleur
-                    const rsiA = a.stoch_rsi_k || 50;
-                    const rsiB = b.stoch_rsi_k || 50;
-                    
-                    if (a.signal === 'LONG') {
-                        return rsiA - rsiB; // RSI bas en premier pour LONG
-                    } else {
-                        return rsiB - rsiA; // RSI haut en premier pour SHORT
-                    }
+                    const scoreA = a.signal_score !== undefined ? a.signal_score : 200;
+                    const scoreB = b.signal_score !== undefined ? b.signal_score : 200;
+                    return scoreA - scoreB; // Ascendant: score bas en premier
                 }
                 
                 let valA = a[sortColumn];
@@ -552,22 +589,12 @@
         function formatNumber(num, decimals = 2) {
             if (num === null || num === undefined) return '-';
             
-            // Pour les très petits nombres (< 0.0001)
-            if (num < 0.0001 && num > 0) {
+            // Pour les très petits nombres (< 0.01)
+            if (num < 0.01 && num > 0) {
                 return num.toFixed(8);
             }
             
-            // Pour les petits nombres (< 0.01)
-            if (num < 0.01 && num > 0) {
-                return num.toFixed(6);
-            }
-            
-            // Pour les nombres entre 0.01 et 1
-            if (num < 1 && num > 0) {
-                return num.toFixed(4);
-            }
-            
-            // Pour les grands nombres (> 1000)
+            // Pour les grands nombres
             if (num >= 1000) {
                 return num.toLocaleString('fr-FR', { 
                     minimumFractionDigits: 2,
@@ -575,22 +602,7 @@
                 });
             }
             
-            // Pour les nombres normaux (1 à 1000)
             return num.toFixed(decimals);
-        }
-
-        /**
-         * Formate le prix de manière intelligente
-         */
-        function formatPrice(price) {
-            if (price === null || price === undefined) return '-';
-            
-            if (price < 0.0001) return price.toFixed(8);
-            if (price < 0.01) return price.toFixed(6);
-            if (price < 1) return price.toFixed(4);
-            if (price < 100) return price.toFixed(3);
-            if (price < 10000) return price.toFixed(2);
-            return price.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
         }
 
         /**
@@ -620,24 +632,13 @@
             if (crypto.has_rsi) ratingIndicators.push('<span class="indicator rsi" title="RSI Stoch optimal">RSI</span>');
             if (crypto.has_sr) ratingIndicators.push('<span class="indicator sr" title="Proche S/R">S/R</span>');
             
-            // Déterminer si la ligne est cliquable (a un signal)
-            const isClickable = crypto.signal === 'LONG' || crypto.signal === 'SHORT';
-            const clickHandler = isClickable ? `onclick="openChart('${crypto.name}')"` : '';
-            
-            // Sources d'images multiples pour garantir l'affichage
-            // 1. CoinGecko (source principale)
-            // 2. GitHub cryptocurrency-icons (fallback fiable)
-            // 3. Avatar généré (dernier recours)
-            const githubIcon = `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${crypto.name.toLowerCase()}.png`;
-            const avatarFallback = `https://ui-avatars.com/api/?name=${crypto.name}&background=random&color=fff&size=48&bold=true`;
-            
             return `
-                <tr class="crypto-row ${signalClass !== 'aucun' ? 'has-signal' : ''}" ${clickHandler}>
+                <tr class="crypto-row ${signalClass !== 'aucun' ? 'has-signal' : ''}">
                     <td class="crypto-name">
-                        <img src="${crypto.image}" alt="${crypto.name}" class="crypto-icon" onerror="this.onerror=function(){this.src='${avatarFallback}'}; this.src='${githubIcon}';">
+                        <img src="${crypto.image}" alt="${crypto.name}" class="crypto-icon" crossorigin="anonymous" referrerpolicy="no-referrer" onerror="this.src='https://via.placeholder.com/24?text=${crypto.name.charAt(0)}'; this.onerror=null;">
                         <span class="crypto-label">${crypto.name}</span>
                     </td>
-                    <td class="price">${formatPrice(crypto.price)}</td>
+                    <td class="price">${formatNumber(crypto.price, 8)}</td>
                     <td class="stoch-rsi">
                         <div class="stoch-values">
                             <span class="stoch-k">K: ${formatNumber(crypto.stoch_rsi_k)}</span>
@@ -649,13 +650,15 @@
                     </td>
                     <td class="signal-cell">
                         <div class="signal-with-rating">
-                            <span class="signal-badge ${strengthClass}">${crypto.signal}</span>
                             ${crypto.signal !== 'AUCUN' ? `
+                                <a href="https://www.tradingview.com/chart/?symbol=BINANCE:${crypto.symbol}" target="_blank" class="signal-link">
+                                    <span class="signal-badge ${strengthClass}">${crypto.signal}</span>
+                                </a>
                                 <div class="rating-info">
                                     <span class="rating-stars">${ratingStars}</span>
                                     <div class="rating-indicators">${ratingIndicators.join('')}</div>
                                 </div>
-                            ` : ''}
+                            ` : `<span class="signal-badge ${strengthClass}">${crypto.signal}</span>`}
                         </div>
                     </td>
                 </tr>
@@ -700,101 +703,27 @@
         }
 
         /**
-         * Active le rafraîchissement automatique (toujours activé)
+         * Active/désactive le rafraîchissement automatique
          */
-        function startAutoRefresh() {
-            autoRefreshInterval = setInterval(loadData, AUTO_REFRESH_DELAY);
-            console.log('Rafraîchissement automatique activé');
-        }
-
-        // ========== TradingView Chart ==========
-        
-        /**
-         * Ouvre le graphique TradingView pour un token
-         * Priorité: Binance > Bitget > Coinbase > Kraken > autres
-         */
-        function openChart(symbol) {
-            // Format du symbole pour TradingView: EXCHANGE:SYMBOLUSDT
-            // On préfère Binance car c'est le plus liquide
-            const exchanges = [
-                'BINANCE',
-                'BITGET', 
-                'COINBASE',
-                'KRAKEN'
-            ];
+        function toggleAutoRefresh() {
+            const checkbox = document.getElementById('autoRefresh');
             
-            // Utiliser Binance par défaut (le plus liquide)
-            const exchange = exchanges[0];
-            const tvSymbol = `${exchange}:${symbol}USDT`;
-            
-            // Ouvrir TradingView en timeframe 4H
-            const url = `https://www.tradingview.com/chart/?symbol=${tvSymbol}&interval=240`;
-            window.open(url, '_blank');
-        }
-
-        // ========== Paramètres ==========
-        
-        /**
-         * Ouvre le modal des paramètres
-         */
-        function openSettings() {
-            document.getElementById('settingsModal').classList.add('open');
-        }
-        
-        /**
-         * Ferme le modal des paramètres
-         */
-        function closeSettings() {
-            document.getElementById('settingsModal').classList.remove('open');
-        }
-        
-        /**
-         * Bascule entre le thème clair et sombre
-         */
-        function toggleTheme() {
-            const isLightMode = document.getElementById('lightModeToggle').checked;
-            document.body.classList.toggle('light-mode', isLightMode);
-            localStorage.setItem('theme', isLightMode ? 'light' : 'dark');
-        }
-        
-        /**
-         * Active/désactive le son des notifications
-         */
-        function toggleSound() {
-            soundEnabled = document.getElementById('soundToggle').checked;
-            localStorage.setItem('soundEnabled', soundEnabled);
-        }
-        
-        /**
-         * Charge les préférences sauvegardées
-         */
-        function loadPreferences() {
-            // Thème
-            const savedTheme = localStorage.getItem('theme');
-            if (savedTheme === 'light') {
-                document.body.classList.add('light-mode');
-                document.getElementById('lightModeToggle').checked = true;
-            }
-            
-            // Son
-            const savedSound = localStorage.getItem('soundEnabled');
-            if (savedSound !== null) {
-                soundEnabled = savedSound === 'true';
-                document.getElementById('soundToggle').checked = soundEnabled;
+            if (checkbox.checked) {
+                autoRefreshInterval = setInterval(loadData, AUTO_REFRESH_DELAY);
+                console.log('Rafraîchissement automatique activé');
+            } else {
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+                console.log('Rafraîchissement automatique désactivé');
             }
         }
-        
-        // Fermer le modal en cliquant à l'extérieur
-        document.getElementById('settingsModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeSettings();
-            }
-        });
 
         // ========== Initialisation ==========
         document.addEventListener('DOMContentLoaded', async function() {
-            // Charger les préférences utilisateur
-            loadPreferences();
+            // Charger les paramètres sauvegardés
+            loadSettings();
             
             // Demander la permission pour les notifications
             await requestNotificationPermission();
@@ -802,8 +731,16 @@
             // Charger les données initiales
             loadData();
             
-            // Activer le rafraîchissement automatique (toujours activé)
-            startAutoRefresh();
+            // Activer le rafraîchissement automatique (toujours actif)
+            autoRefreshInterval = setInterval(loadData, AUTO_REFRESH_DELAY);
+            console.log('Rafraîchissement automatique activé (15 min)');
+            
+            // Fermer le modal si on clique en dehors
+            document.getElementById('settingsModal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    toggleSettings();
+                }
+            });
         });
     </script>
 </body>
