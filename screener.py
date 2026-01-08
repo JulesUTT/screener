@@ -136,6 +136,10 @@ class CryptoScreener:
                 if symbol in self.stablecoins:
                     continue
                 
+                # SÉCURITÉ: Vérifier aussi la whitelist (au cas où CoinGecko retourne des tokens bizarres)
+                if symbol not in self.whitelist_top150:
+                    continue
+                
                 # Vérifier si la paire existe sur Binance
                 if symbol in binance_usdt_symbols:
                     top_100.append(symbol)
@@ -901,6 +905,11 @@ class CryptoScreener:
         results = []
         
         for symbol in self.top_50_symbols:
+            # SÉCURITÉ: Rejeter tout token qui n'est pas dans la whitelist
+            if symbol not in self.whitelist_top150:
+                print(f"REJETÉ (hors whitelist): {symbol}")
+                continue
+                
             print(f"Analyse de {symbol}...")
             analysis = self.analyze_symbol(symbol)
             if analysis:
